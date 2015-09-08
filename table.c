@@ -201,3 +201,17 @@ void table_printn(struct table const *t, size_t n, FILE *f)
                 }
         }
 }
+
+void table_free(struct table *t)
+{
+        size_t i;
+
+        for (i = 0; i < t->cols; ++i) {
+                free(t->data[i]);
+        }
+
+        free(t->data);
+        free(t->headers);
+        free(t->max);
+        free(t->fmt);
+}
