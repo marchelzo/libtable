@@ -17,8 +17,7 @@ struct table {
 
 bool table_init(struct table *t, ...);
 bool table_add(struct table *t, ...);
-bool table_printn(struct table const *t, size_t n, FILE *f);
-void table_print(struct table const *t, FILE *f);
+bool table_print(struct table const *t, size_t maxwidth, FILE *f);
 void table_free(struct table *t);
 
 #endif
