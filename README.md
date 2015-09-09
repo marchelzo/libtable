@@ -3,6 +3,14 @@
 libtable is a tiny C library for generating
 pretty-printed ascii tables.
 
+### Installation
+
+```sh
+git clone https://github.com/marchelzo/libtable.git && \
+cd libtable && \
+make && sudo make install
+```
+
 ### Example usage
 
 ```c
