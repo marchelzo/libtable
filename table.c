@@ -3,16 +3,153 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdarg.h>
+#include <limits.h>
 
 #include "table.h"
+
+#define CPSTART(c) (((unsigned char) (c)) >> (CHAR_BIT - 2) != 2)
 
 
 static char const *DELIM = "\x1f";
 static char const CORNER = '+';
 static char const INTERSECT = '*';
 
-static inline size_t max(size_t a, size_t b) {
+static inline size_t max(size_t a, size_t b)
+{
         return a > b ? a : b;
+}
+
+static size_t utf8len(char const *s)
+{
+        size_t len = 0;
+        char const *c;
+
+        for (c = s; *c; ++c) {
+                if (CPSTART(*c)) {
+                        len += 1;
+                }
+        }
+
+        return len;
+}
+
+static size_t b2cp(char const *s, size_t n)
+{
+        size_t cp, i;
+
+        for (cp = i = 0; s[i] && n > 0; ++i, --n) {
+                if (CPSTART(s[i])) {
+                        cp += 1;
+                }
+        }
+
+        return cp;
+}
+
+static void fputnc(int c, size_t n, FILE *f)
+{
+        while (n --> 0) {
+                fputc(c, f);
+        }
+}
+
+static size_t find_break(char const *s, size_t max, bool *hyphen)
+{
+        char *c;
+        size_t brk, cp;
+
+        if (!*s) {
+                *hyphen = false;
+                return 0;
+        }
+
+        for (c = s, cp = brk = 0; *c && cp < max; ++c) {
+                brk += 1;
+                if (CPSTART(*c)) {
+                        cp += 1;
+                }
+        }
+
+        while (!CPSTART(*c)) {
+                c += 1;
+                brk += 1;
+        }
+
+        while (*c && c != s && !isspace(*c)) {
+                c -= 1;
+        }
+
+        if (c == s) {
+                *hyphen = true;
+                while (!CPSTART(s[--brk]));
+                return brk;
+        }
+
+        *hyphen = false;
+
+        return c - s;
+}
+
+static void print_row(char **cells, size_t *max, size_t cols, FILE *f)
+{
+        size_t i, n;
+
+        for (i = 0; i < cols; ++i) {
+                fputs("| ", f);
+                fputs(cells[i], f);
+
+                n = max[i] - utf8len(cells[i]) + 1;
+                fputnc(' ', n, f);
+
+                if (i + 1 == cols) {
+                        fputs("|\n", f);
+                }
+        }
+}
+
+static void print_row_n(char **cells, size_t *max, size_t *remaining, size_t cols, FILE *f)
+{
+        size_t i, n, pad;
+        bool hyphen, finished;
+
+        for (i = 0; i < cols; ++i) {
+                remaining[i] = utf8len(cells[i]);
+        }
+
+        for (finished = false; !finished;) {
+                finished = true;
+                for (i = 0; i < cols; ++i) {
+                        fputs("| ", f);
+
+                        n = find_break(cells[i], max[i], &hyphen);
+                        fwrite(cells[i], 1, n, f);
+
+                        if (hyphen) {
+                                fputc('-', f);
+                        } else if (isspace(cells[i][n])) {
+                                fputc(' ', f);
+                                remaining[i] -= 1;
+                                cells[i] += 1;
+                        } else {
+                                fputc(' ', f);
+                        }
+
+                        remaining[i] -= b2cp(cells[i], n);
+
+                        if (remaining[i] != 0) {
+                                finished = false;
+                        }
+
+                        pad = max[i] - b2cp(cells[i], n);
+                        fputnc(' ', pad, f);
+
+                        cells[i] += n;
+
+                        if (i + 1 == cols) {
+                                fputs("|\n", f);
+                        }
+                }
+        }
 }
 
 bool table_init(struct table *t, ...)
@@ -72,7 +209,7 @@ bool table_init(struct table *t, ...)
         }
 
         for (i = 0; i < t->cols; ++i) {
-                t->max[i] = strlen(t->headers[i]);
+                t->max[i] = utf8len(t->headers[i]);
         }
 
         return true;
@@ -82,7 +219,7 @@ bool table_add(struct table *t, ...)
 {
         va_list ap;
         char *field, **row, buffer[512];
-        size_t i, len;
+        size_t i;
 
         if (t->rows == t->alloc) {
                 char ***tmp;
@@ -110,14 +247,13 @@ bool table_add(struct table *t, ...)
         field = strtok(buffer, DELIM);
 
         for (i = 0; field != NULL; ++i, field = strtok(NULL, DELIM)) {
-                len = strlen(field);
-                row[i] = malloc(len + 1);
+                row[i] = malloc(strlen(field) + 1);
                 if (row[i] == NULL) {
                         goto err;
                 }
                 strcpy(row[i], field);
 
-                t->max[i] = max(t->max[i], len);
+                t->max[i] = max(t->max[i], utf8len(field));
         }
 
         return true;
@@ -132,7 +268,7 @@ err:
 
 void table_print(struct table const *t, FILE *f)
 {
-        size_t i, j, width;
+        size_t i, width;
 
         width = t->cols * 2 + 2;
         for (i = 0; i < t->cols; ++i) {
@@ -140,66 +276,96 @@ void table_print(struct table const *t, FILE *f)
         }
 
         fputc(CORNER, f);
-        for (i = 0; i < width; ++i) {
-                fputc('-', f);
-        }
+        fputnc('-', width, f);
         fputc(CORNER, f);
         fputc('\n', f);
 
-        for (i = 0; i < t->cols; ++i) {
-                fprintf(
-                        f,
-                        "| %-*.*s%s",
-                        (int) t->max[i],
-                        (int) t->max[i],
-                        t->headers[i],
-                        i + 1 == t->cols ? " |\n" : " "
-                );
-        }
+        print_row(t->headers, t->max, t->cols, f);
 
         fputc(INTERSECT, f);
-        for (i = 0; i < width; ++i) {
-                fputc('-', f);
-        }
+        fputnc('-', width, f);
         fputc(INTERSECT, f);
         fputc('\n', f);
 
         for (i = 0; i < t->rows; ++i) {
-                for (j = 0; j < t->cols; ++j) {
-                        fprintf(
-                                f,
-                                "| %-*.*s%s",
-                                (int) t->max[j],
-                                (int) t->max[j],
-                                t->data[i][j],
-                                j + 1 == t->cols ? " |\n" : " "
-                        );
-                }
+                print_row(t->data[i], t->max, t->cols, f);
         }
 
         fputc(CORNER, f);
-        for (i = 0; i < width; ++i) {
-                fputc('-', f);
-        }
+        fputnc('-', width, f);
         fputc(CORNER, f);
         fputc('\n', f);
 }
 
-void table_printn(struct table const *t, size_t n, FILE *f)
+bool table_printn(struct table const *t, size_t n, FILE *f)
 {
-        size_t i, j;
+        size_t i, width, maxidx, *max, *remaining;
 
-        fputc(CORNER, f);
-        fputc(' ', f);
-        for (i = 0; i < t->cols; ++i) {
-                fprintf(f, "%s%c", t->headers[i], i + 1 == t->cols ? '\n' : ' ');
+        if (n < t->cols * 3 + 4) {
+                /* Not enough space */
+                return false;
         }
 
-        for (i = 0; i < t->rows; ++i) {
-                for (j = 0; j < t->cols; ++j) {
-                        fprintf(f, "%s%c", t->data[i][j], j + 1 == t->cols ? '\n' : ' ');
+        n -= 2;
+
+        max = malloc(t->cols * sizeof *max);
+        if (max == NULL) {
+                return false;
+        }
+
+        remaining = malloc(t-> cols * sizeof *remaining);
+        if (remaining == NULL) {
+                free(max);
+                return false;
+        }
+
+        width = t->cols * 2 + 2;
+        maxidx = 0;
+        for (i = 0; i < t->cols; ++i) {
+                max[i] = t->max[i];
+                width += t->max[i];
+                if (max[i] > max[maxidx]) {
+                        maxidx = i;
                 }
         }
+
+        if (width > n) {
+                max[maxidx] -= width - n;
+                width = n;
+        }
+
+        fputc(CORNER, f);
+        fputnc('-', width, f);
+        fputc(CORNER, f);
+        fputc('\n', f);
+
+        print_row_n(t->headers, max, remaining, t->cols, f);
+
+        fputc(INTERSECT, f);
+        fputnc('-', width, f);
+        fputc(INTERSECT, f);
+        fputc('\n', f);
+
+        for (i = 0; i < t->rows; ++i) {
+                print_row_n(t->data[i], max, remaining, t->cols, f);
+
+                if (i + 1 < t->rows) {
+                        size_t j;
+                        fputc('|', f);
+                        for (j = 0; j < t->cols; ++j) {
+                                fputnc('-', max[j] + 2, f);
+                                fputc('|', f);
+                        }
+                        fputc('\n', f);
+                }
+        }
+
+        fputc(CORNER, f);
+        fputnc('-', width, f);
+        fputc(CORNER, f);
+        fputc('\n', f);
+
+        return true;
 }
 
 void table_free(struct table *t)
