@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <limits.h>
+#include <assert.h>
 
 #include "table.h"
 
@@ -90,12 +91,28 @@ static size_t find_break(char const *s, size_t max, bool *hyphen)
         return c - s;
 }
 
-static void print_row(char **cells, size_t *max, size_t *remaining, size_t cols, FILE *f)
+static void print_row(char * const *data, size_t *max, size_t *remaining, size_t cols, FILE *f)
 {
+        static size_t alloc = 0;
+        static char const **cells = NULL;
+
         size_t i, n, pad;
         bool hyphen, finished;
 
+        if (cols > alloc) {
+                char const **tmp;
+                alloc = cols;
+                tmp = realloc(cells, alloc * sizeof *cells);
+                if (tmp == NULL) {
+                        return;
+                }
+
+                cells = tmp;
+
+        }
+
         for (i = 0; i < cols; ++i) {
+                cells[i] = data[i];
                 remaining[i] = utf8len(cells[i]);
         }
 
@@ -230,6 +247,7 @@ bool table_add(struct table *t, ...)
         field = strtok(buffer, DELIM);
 
         for (i = 0; field != NULL; ++i, field = strtok(NULL, DELIM)) {
+                assert(&row[i] == &t->data[t->rows - 1][i]);
                 row[i] = malloc(strlen(field) + 1);
                 if (row[i] == NULL) {
                         goto err;
@@ -330,7 +348,13 @@ bool table_print(struct table const *t, size_t n, FILE *f)
 
 void table_free(struct table *t)
 {
-        size_t i;
+        size_t i, j;
+
+        for (i = 0; i < t->rows; ++i) {
+                for (j = 0; j < t->cols; ++j) {
+                        free(t->data[i][j]);
+                }
+        }
 
         for (i = 0; i < t->cols; ++i) {
                 free(t->data[i]);
