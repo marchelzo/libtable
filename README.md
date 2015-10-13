@@ -27,15 +27,16 @@ int main(void) {
                 NULL
         );
 
-        table_add(
-            &t,
-            "test this text is going to be really long so as "
-            "to potentially find problems in the table drawing "
-            "algorithm. it is very long haha "
-            "long text long text long text",
-            36,
-            3.1
-        );
+        table_add(&t, "Amet fugiat commodi eligendi possimus harum earum. "
+                      "Sequi quidem ab commodi tempore mollitia provident. "
+                      "Iusto incidunt consequuntur rem eligendi illum. "
+                      "Nisi odit soluta dolorum vero enim neque id. Hic magni? "
+                      "foo bar baz", 36, 3.1);
+        table_add(&t, "Ametfugiatcommodieligendipossimusharumearum."
+                      "Sequiquidemabcommoditemporemollitiaprovident."
+                      "Iustoinciduntconsequunturremeligendiillum."
+                      "Nisioditsolutadolorumveroenimnequeid.Hicmagni?"
+                      "foobarbaz",36,3.1);
         table_add(&t, "Ξεσκεπάζωτὴνψυχοφθόραβδελυγμία", 36, 3.1);
         table_add(&t, "Ξεσκεπάζω τὴν ψυχοφθόρα βδελυγμία", 36, 3.1);
         table_add(&t, "Bob", 18, 1.3123);
@@ -44,7 +45,7 @@ int main(void) {
         table_add(&t, "Larry", 59, 12.52);
         table_add(&t, "Ё Ђ Ѓ Є Ѕ І Ї Ј Љ", 21, 14.12312312);
 
-        table_print(&t, 80, stdout);
+        table_print(&t, 60, stdout);
 
         table_free(&t);
 
@@ -55,25 +56,34 @@ int main(void) {
 #### Output
 
 ```
-+------------------------------------------------------------------------------+
-| Name                                                           | Age | Score |
-*------------------------------------------------------------------------------*
-| test this text is going to be really long so as to potentially | 36  | 3.10  |
-| find problems in the table drawing algorithm. it is very long  |     |       |
-| haha long text long text long text                             |     |       |
-|----------------------------------------------------------------|-----|-------|
-| Ξεσκεπάζωτὴνψυχοφθόραβδελυγμία                                 | 36  | 3.10  |
-|----------------------------------------------------------------|-----|-------|
-| Ξεσκεπάζω τὴν ψυχοφθόρα βδελυγμία                              | 36  | 3.10  |
-|----------------------------------------------------------------|-----|-------|
-| Bob                                                            | 18  | 1.31  |
-|----------------------------------------------------------------|-----|-------|
-| Alice                                                          | 20  | 6.43  |
-|----------------------------------------------------------------|-----|-------|
-| Roger                                                          | 18  | 12.45 |
-|----------------------------------------------------------------|-----|-------|
-| Larry                                                          | 59  | 12.52 |
-|----------------------------------------------------------------|-----|-------|
-| Ё Ђ Ѓ Є Ѕ І Ї Ј Љ                                              | 21  | 14.12 |
-+------------------------------------------------------------------------------+
++--------------------------------------------------------+
+| Name                                     | Age | Score |
+*--------------------------------------------------------*
+| Amet fugiat commodi eligendi possimus    | 36  | 3.10  |
+| harum earum. Sequi quidem ab commodi     |     |       |
+| tempore mollitia provident. Iusto        |     |       |
+| incidunt consequuntur rem eligendi       |     |       |
+| illum. Nisi odit soluta dolorum vero     |     |       |
+| enim neque id. Hic magni? foo bar baz    |     |       |
+|------------------------------------------|-----|-------|
+| Ametfugiatcommodieligendipossimusharume- | 36  | 3.10  |
+| arum.Sequiquidemabcommoditemporemolliti- |     |       |
+| aprovident.Iustoinciduntconsequunturrem- |     |       |
+| eligendiillum.Nisioditsolutadolorumvero- |     |       |
+| enimnequeid.Hicmagni?foobarbaz           |     |       |
+|------------------------------------------|-----|-------|
+| Ξεσκεπάζωτὴνψυχοφθόραβδελυγμία           | 36  | 3.10  |
+|------------------------------------------|-----|-------|
+| Ξεσκεπάζω τὴν ψυχοφθόρα βδελυγμία        | 36  | 3.10  |
+|------------------------------------------|-----|-------|
+| Bob                                      | 18  | 1.31  |
+|------------------------------------------|-----|-------|
+| Alice                                    | 20  | 6.43  |
+|------------------------------------------|-----|-------|
+| Roger                                    | 18  | 12.45 |
+|------------------------------------------|-----|-------|
+| Larry                                    | 59  | 12.52 |
+|------------------------------------------|-----|-------|
+| Ё Ђ Ѓ Є Ѕ І Ї Ј Љ                        | 21  | 14.12 |
++--------------------------------------------------------+
 ```
