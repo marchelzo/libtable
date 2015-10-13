@@ -289,7 +289,7 @@ bool table_print(struct table const *t, size_t n, FILE *f)
                 return false;
         }
 
-        width = t->cols * 2 + 2;
+        width = t->cols * 3 + 1;
         for (i = 0; i < t->cols; ++i) {
                 max[i] = t->max[i];
                 width += t->max[i];
@@ -297,6 +297,7 @@ bool table_print(struct table const *t, size_t n, FILE *f)
 
         avg = n / t->cols;
         trimthrshld = 0;
+
         while (width > n) {
                 bool none = true;
                 for (i = 0; i < t->cols; ++i) {
@@ -313,14 +314,14 @@ bool table_print(struct table const *t, size_t n, FILE *f)
         }
 
         fputc(CORNER, f);
-        fputnc('-', width, f);
+        fputnc('-', width - 2, f);
         fputc(CORNER, f);
         fputc('\n', f);
 
         print_row(t->headers, max, remaining, t->cols, f);
 
         fputc(INTERSECT, f);
-        fputnc('-', width, f);
+        fputnc('-', width - 2, f);
         fputc(INTERSECT, f);
         fputc('\n', f);
 
@@ -339,7 +340,7 @@ bool table_print(struct table const *t, size_t n, FILE *f)
         }
 
         fputc(CORNER, f);
-        fputnc('-', width, f);
+        fputnc('-', width - 2, f);
         fputc(CORNER, f);
         fputc('\n', f);
 
