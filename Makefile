@@ -10,6 +10,6 @@ all: libtable.a
 libtable.a: table.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-install: libtable.a
+install:
 	cp libtable.a /usr/local/lib/libtable.a
 	cp table.h /usr/local/include/table.h
