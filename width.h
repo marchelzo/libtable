@@ -10,11 +10,15 @@ typedef uint32_t u32;
 typedef int32_t  i32;
 typedef int64_t  isize;
 
-isize
-term_width(void const *s, isize n);
+enum {
+        TERM_AMBIGUOUS_WIDE = 1,
+};
 
 isize
-term_fit_cols(void const *s, isize n, int cols);
+term_width(void const *s, isize n, int fl);
+
+isize
+term_fit_cols(void const *s, isize n, int cols, int fl);
 
 enum {
         TERM_LB_ANY,
@@ -23,6 +27,6 @@ enum {
 };
 
 isize
-term_step(void const *s, isize n, isize i, int *w, int *lb);
+term_step(void const *s, isize n, isize i, int *w, int *lb, int fl);
 
 #endif

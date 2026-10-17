@@ -5,6 +5,13 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+extern void *TABLE_OPTS;
+
+enum {
+        TABLE_OPT_BOX            = 1,
+        TABLE_OPT_AMBIGUOUS_WIDE = 2,
+};
+
 struct table {
         size_t cols;
         size_t rows;
@@ -13,6 +20,7 @@ struct table {
         char ***data;
         char **headers;
         char *fmt;
+        int opts;
 };
 
 bool table_init(struct table *t, ...);

@@ -106,3 +106,29 @@ int main(void) {
 | Ё Ђ Ѓ Є Ѕ І Ї Ј Љ                        | 21  | 14.12 |
 +--------------------------------------------------------+
 ```
+
+### Options
+
+Options follow the column definitions, introduced by `TABLE_OPTS` and
+terminated by `0` (in place of the usual `NULL`):
+
+```c
+table_init(&t, "Name", "%s", "Age", "%d", TABLE_OPTS, TABLE_OPT_BOX, 0);
+```
+
+| Option                     | Effect                                                    |
+|----------------------------|-----------------------------------------------------------|
+| `TABLE_OPT_BOX`            | Draw borders with Unicode box-drawing characters          |
+| `TABLE_OPT_AMBIGUOUS_WIDE` | Treat East Asian Ambiguous characters (`± — … é Ω`, box-drawing) as 2 columns, for terminals configured that way |
+
+```
+┌───────┬─────┐
+│ Name  │ Age │
+╞═══════╪═════╡
+│ Alice │ 20  │
+├───────┼─────┤
+│ Bob   │ 18  │
+└───────┴─────┘
+```
+
+`make example && ./example [-b] [-a] [width]` shows a larger demo.

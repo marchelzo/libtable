@@ -39,7 +39,7 @@ check(u8 const *s, isize n, bool const *brk, bool fast)
         int w;
 
         for (i = 0; i < n; i += m) {
-                m = fast ? term_cluster(s, n, i, &w) : Cluster(s, n, i, &w);
+                m = fast ? term_cluster(s, n, i, &w, 0) : Cluster(s, n, i, &w, 0);
                 if (!brk[i]) {
                         return false;
                 }

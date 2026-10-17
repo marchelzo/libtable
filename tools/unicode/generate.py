@@ -148,6 +148,7 @@ def properties(files):
             | (emoji[cp] << 7)
             | (incb[cp] << 8)
             | (kinsoku[cp] << 10)
+            | ((eaw[cp] == 'A' and width == 1) << 12)
         )
     return props
 
@@ -181,7 +182,7 @@ def generate(directory):
     print('// Unicode 17.0.0; https://www.unicode.org/Public/17.0.0/ucd/')
     print('// See tools/unicode/LICENSE.txt for the Unicode data license.\n')
     print(f'#define PROP_SHIFT {SHIFT}\n')
-    emit('PropValues', 'u16', values, 8, '0x{:03X}')
+    emit('PropValues', 'u16', values, 8, '0x{:04X}')
     emit('PropStage1', 'u8', stage1, 16, '{:3d}')
     emit('PropStage2', 'u8', stage2, 16, '{:3d}')
 

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "table.h"
 
@@ -7,9 +8,41 @@ int
 main(int argc, char **argv)
 {
         struct table t;
-        size_t width = (argc > 1) ? strtoul(argv[1], NULL, 10) : 72;
+        size_t width = 72;
+        int opts[3] = { 0 };
+        int nopts = 0;
+        bool box = false;
+        bool amb = false;
+        int i;
 
-        if (!table_init(&t, "Name", "%s", "Lang", "%s", "Greeting", "%s", "Score", "%.1f", NULL)) {
+        for (i = 1; i < argc; ++i) {
+                if (strcmp(argv[i], "-b") == 0) {
+                        box = true;
+                } else if (strcmp(argv[i], "-a") == 0) {
+                        amb = true;
+                } else {
+                        width = strtoul(argv[i], NULL, 10);
+                }
+        }
+
+        if (box) {
+                opts[nopts++] = TABLE_OPT_BOX;
+        }
+
+        if (amb) {
+                opts[nopts++] = TABLE_OPT_AMBIGUOUS_WIDE;
+        }
+
+        if (
+                !table_init(
+                        &t,
+                        "Name",     "%s",
+                        "Lang",     "%s",
+                        "Greeting", "%s",
+                        "Score",    "%.1f",
+                        TABLE_OPTS, opts[0], opts[1], 0
+                )
+        ) {
                 return 1;
         }
 

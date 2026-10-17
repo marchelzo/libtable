@@ -35,6 +35,7 @@ enum {
 #define PEMOJI(p) (((p) >> 7) & 1)
 #define PINCB(p)  (((p) >> 8) & 3)
 #define PLB(p)    (((p) >> 10) & 3)
+#define PAMB(p)   (((p) >> 12) & 1)
 
 typedef struct {
         u8 ri;
@@ -312,7 +313,7 @@ SimpleWidth(i32 cp)
 }
 
 static isize
-Cluster(u8 const *s, isize n, isize i, int *w)
+Cluster(u8 const *s, isize n, isize i, int *w, int fl)
 {
         GState st = { 0 };
         isize len;
@@ -332,6 +333,10 @@ Cluster(u8 const *s, isize n, isize i, int *w)
         p     = Props(cp);
         width = PWIDTH(p);
         end   = i + len;
+
+        if ((fl & TERM_AMBIGUOUS_WIDE) && PAMB(p)) {
+                width = 2;
+        }
 
         Advance(&st, p);
 
@@ -361,7 +366,7 @@ Cluster(u8 const *s, isize n, isize i, int *w)
 }
 
 static isize
-term_cluster(u8 const *s, isize n, isize i, int *w)
+term_cluster(u8 const *s, isize n, isize i, int *w, int fl)
 {
         isize m;
         isize m2;
@@ -377,7 +382,7 @@ term_cluster(u8 const *s, isize n, isize i, int *w)
                 return 1;
         }
 
-        int sw = (cp >= 0) ? SimpleWidth(cp) : -1;
+        int sw = (cp >= 0 && !(fl & TERM_AMBIGUOUS_WIDE)) ? SimpleWidth(cp) : -1;
 
         if (sw > 0) {
                 if (i + m >= n) {
@@ -393,7 +398,7 @@ term_cluster(u8 const *s, isize n, isize i, int *w)
                 }
         }
 
-        return Cluster(s, n, i, w);
+        return Cluster(s, n, i, w, fl);
 }
 
 static isize
@@ -429,7 +434,7 @@ Run(u8 const *s, isize n, isize i, isize cols, isize *width)
 }
 
 static isize
-Fit(u8 const *s, isize n, isize cols, isize *out)
+Fit(u8 const *s, isize n, isize cols, isize *out, int fl)
 {
         isize width = 0;
         isize i = 0;
@@ -447,15 +452,17 @@ Fit(u8 const *s, isize n, isize cols, isize *out)
                 if (c >= 0x20 && c < 0x7F && (i + 1 >= n || s[i + 1] < 0x80)) {
                         m = 1;
                         w = 1;
+                } else if (c >= 0x80 && (fl & TERM_AMBIGUOUS_WIDE)) {
+                        m = Cluster(s, n, i, &w, fl);
                 } else if (c >= 0x80) {
                         isize j = Run(s, n, i, cols, &width);
                         if (j > i) {
                                 i = j;
                                 continue;
                         }
-                        m = Cluster(s, n, i, &w);
+                        m = Cluster(s, n, i, &w, fl);
                 } else {
-                        m = term_cluster(s, n, i, &w);
+                        m = term_cluster(s, n, i, &w, fl);
                 }
 
                 if (width + w > cols) {
@@ -472,7 +479,7 @@ Fit(u8 const *s, isize n, isize cols, isize *out)
 }
 
 isize
-term_width(void const *s, isize n)
+term_width(void const *s, isize n, int fl)
 {
         isize width;
 
@@ -480,13 +487,13 @@ term_width(void const *s, isize n)
                 n = strlen(s);
         }
 
-        Fit(s, n, INT64_MAX, &width);
+        Fit(s, n, INT64_MAX, &width, fl);
 
         return width;
 }
 
 isize
-term_fit_cols(void const *s, isize n, int cols)
+term_fit_cols(void const *s, isize n, int cols, int fl)
 {
         isize width;
 
@@ -494,11 +501,11 @@ term_fit_cols(void const *s, isize n, int cols)
                 n = strlen(s);
         }
 
-        return Fit(s, n, cols, &width);
+        return Fit(s, n, cols, &width, fl);
 }
 
 isize
-term_step(void const *s, isize n, isize i, int *w, int *lb)
+term_step(void const *s, isize n, isize i, int *w, int *lb, int fl)
 {
         u8 const *p = s;
         isize j = i;
@@ -518,5 +525,5 @@ term_step(void const *s, isize n, isize i, int *w, int *lb)
         cp  = Decode(p + j, n - j, &len);
         *lb = (cp >= 0) ? PLB(Props(cp)) : TERM_LB_ANY;
 
-        return j + term_cluster(p, n, j, w) - i;
+        return j + term_cluster(p, n, j, w, fl) - i;
 }
