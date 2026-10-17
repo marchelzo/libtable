@@ -3,12 +3,9 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdarg.h>
-#include <limits.h>
-#include <assert.h>
 
 #include "table.h"
-
-#define CPSTART(c) (((unsigned char) (c)) >> (CHAR_BIT - 2) != 2)
+#include "width.h"
 
 
 static char const *DELIM = "\x1f";
@@ -20,31 +17,10 @@ static inline size_t max(size_t a, size_t b)
         return a > b ? a : b;
 }
 
-static size_t utf8len(char const *s)
+static size_t
+colwidth(char const *s, size_t n)
 {
-        size_t len = 0;
-        char const *c;
-
-        for (c = s; *c; ++c) {
-                if (CPSTART(*c)) {
-                        len += 1;
-                }
-        }
-
-        return len;
-}
-
-static size_t b2cp(char const *s, size_t n)
-{
-        size_t cp, i;
-
-        for (cp = i = 0; s[i] && n > 0; ++i, --n) {
-                if (CPSTART(s[i])) {
-                        cp += 1;
-                }
-        }
-
-        return cp;
+        return term_width(s, n);
 }
 
 static void fputnc(int c, size_t n, FILE *f)
@@ -54,66 +30,81 @@ static void fputnc(int c, size_t n, FILE *f)
         }
 }
 
-static size_t find_break(char const *s, size_t max, bool *hyphen)
+static size_t
+find_break(char const *s, size_t max, bool *hyphen)
 {
-        char *c;
-        size_t brk, cp;
-
-        if (!*s) {
-                *hyphen = false;
-                return 0;
-        }
-
-        for (c = s, cp = brk = 0; *c && cp < max; ++c) {
-                brk += 1;
-                if (CPSTART(*c)) {
-                        cp += 1;
-                }
-        }
-
-        while (!CPSTART(*c)) {
-                c += 1;
-                brk += 1;
-        }
-
-        while (*c && c != s && !isspace(*c)) {
-                c -= 1;
-        }
-
-        if (c == s) {
-                *hyphen = true;
-                while (!CPSTART(s[--brk]));
-                return brk;
-        }
+        size_t n, len, i, k, brk, soft;
+        int w, pw, lb, plb;
 
         *hyphen = false;
 
-        return c - s;
+        n = term_fit_cols(s, -1, max);
+
+        if (s[n] == '\0' || isspace((unsigned char) s[n])) {
+                return n;
+        }
+
+        len  = strlen(s);
+        brk  = 0;
+        soft = 0;
+
+        for (i = term_step(s, len, 0, &pw, &plb); i <= n; i += k) {
+                k = term_step(s, len, i, &w, &lb);
+                if (k == 0) {
+                        break;
+                }
+
+                if (isspace((unsigned char) s[i])) {
+                        brk = i;
+                } else if (pw == 2 || w == 2) {
+                        soft = i;
+                        if (lb != TERM_LB_NO_START && plb != TERM_LB_NO_END) {
+                                brk = i;
+                        }
+                }
+
+                pw  = w;
+                plb = lb;
+        }
+
+        if (brk > 0) {
+                return brk;
+        }
+
+        if (soft > 0) {
+                return soft;
+        }
+
+        *hyphen = true;
+
+        i = term_fit_cols(s, -1, max - 1);
+        if (i == 0) {
+                i = n;
+        }
+
+        return i;
 }
 
-static void print_row(char * const *data, size_t *max, size_t *remaining, size_t cols, FILE *f)
+static void
+print_row(char * const *data, size_t const *max, size_t cols, FILE *f)
 {
         static size_t alloc = 0;
         static char const **cells = NULL;
-
-        size_t i, n, pad;
+        size_t i, n, w;
         bool hyphen, finished;
 
         if (cols > alloc) {
                 char const **tmp;
-                alloc = cols;
-                tmp = realloc(cells, alloc * sizeof *cells);
+                tmp = realloc(cells, cols * sizeof *cells);
                 if (tmp == NULL) {
                         return;
                 }
-
                 cells = tmp;
-
+                alloc = cols;
         }
 
         for (i = 0; i < cols; ++i) {
                 cells[i] = data[i];
-                remaining[i] = utf8len(cells[i]);
         }
 
         for (finished = false; !finished;) {
@@ -122,33 +113,26 @@ static void print_row(char * const *data, size_t *max, size_t *remaining, size_t
                         fputs("| ", f);
 
                         n = find_break(cells[i], max[i], &hyphen);
+                        w = colwidth(cells[i], n);
                         fwrite(cells[i], 1, n, f);
+                        cells[i] += n;
 
                         if (hyphen) {
                                 fputc('-', f);
-                        } else if (isspace(cells[i][n])) {
-                                fputc(' ', f);
-                                remaining[i] -= 1;
-                                cells[i] += 1;
                         } else {
                                 fputc(' ', f);
+                                if (isspace((unsigned char) *cells[i])) {
+                                        cells[i] += 1;
+                                }
                         }
 
-                        remaining[i] -= b2cp(cells[i], n);
-
-                        if (remaining[i] != 0) {
+                        if (*cells[i] != '\0') {
                                 finished = false;
                         }
 
-                        pad = max[i] - b2cp(cells[i], n);
-                        fputnc(' ', pad, f);
-
-                        cells[i] += n;
-
-                        if (i + 1 == cols) {
-                                fputs("|\n", f);
-                        }
+                        fputnc(' ', max[i] > w ? max[i] - w : 0, f);
                 }
+                fputs("|\n", f);
         }
 }
 
@@ -209,7 +193,7 @@ bool table_init(struct table *t, ...)
         }
 
         for (i = 0; i < t->cols; ++i) {
-                t->max[i] = utf8len(t->headers[i]);
+                t->max[i] = colwidth(t->headers[i], strlen(t->headers[i]));
         }
 
         return true;
@@ -217,9 +201,10 @@ bool table_init(struct table *t, ...)
 
 bool table_add(struct table *t, ...)
 {
-        va_list ap;
-        char *field, **row, buffer[512];
-        size_t i;
+        va_list ap, aq;
+        char *buffer, *field, *end, **row;
+        size_t i, len;
+        int n;
 
         if (t->rows == t->alloc) {
                 char ***tmp;
@@ -231,31 +216,47 @@ bool table_add(struct table *t, ...)
                 t->data = tmp;
         }
 
-        row = (t->data[t->rows++] = malloc(t->cols * sizeof (char *)));
-
+        row = malloc(t->cols * sizeof (char *));
         if (row == NULL) {
-                t->rows -= 1;
                 return false;
         }
 
-
-
         va_start(ap, t);
-        vsnprintf(buffer, sizeof buffer, t->fmt, ap);
+        va_copy(aq, ap);
+        n = vsnprintf(NULL, 0, t->fmt, ap);
         va_end(ap);
 
-        field = strtok(buffer, DELIM);
+        buffer = (n < 0) ? NULL : malloc(n + 1);
+        if (buffer == NULL) {
+                va_end(aq);
+                free(row);
+                return false;
+        }
 
-        for (i = 0; field != NULL; ++i, field = strtok(NULL, DELIM)) {
-                assert(&row[i] == &t->data[t->rows - 1][i]);
-                row[i] = malloc(strlen(field) + 1);
+        vsnprintf(buffer, n + 1, t->fmt, aq);
+        va_end(aq);
+
+        field = buffer;
+
+        for (i = 0; i < t->cols; ++i) {
+                end = strchr(field, *DELIM);
+                len = (end != NULL) ? (size_t) (end - field) : strlen(field);
+
+                row[i] = malloc(len + 1);
                 if (row[i] == NULL) {
                         goto err;
                 }
-                strcpy(row[i], field);
+                memcpy(row[i], field, len);
+                row[i][len] = '\0';
 
-                t->max[i] = max(t->max[i], utf8len(field));
+                t->max[i] = max(t->max[i], colwidth(row[i], len));
+
+                field += (end != NULL) ? len + 1 : len;
         }
+
+        free(buffer);
+
+        t->data[t->rows++] = row;
 
         return true;
 
@@ -263,16 +264,18 @@ err:
         while (i --> 0) {
                 free(row[i]);
         }
-        
+
+        free(row);
+        free(buffer);
+
         return false;
 }
 
 bool table_print(struct table const *t, size_t n, FILE *f)
 {
-        size_t i, width, avg, trimthrshld, *max, *remaining;
+        size_t i, width, avg, trimthrshld, *max;
 
-        if (n < t->cols * 3 + 4) {
-                /* Not enough space */
+        if (n < t->cols * 5 + 3) {
                 return false;
         }
 
@@ -280,12 +283,6 @@ bool table_print(struct table const *t, size_t n, FILE *f)
 
         max = malloc(t->cols * sizeof *max);
         if (max == NULL) {
-                return false;
-        }
-
-        remaining = malloc(t-> cols * sizeof *remaining);
-        if (remaining == NULL) {
-                free(max);
                 return false;
         }
 
@@ -301,7 +298,7 @@ bool table_print(struct table const *t, size_t n, FILE *f)
         while (width > n) {
                 bool none = true;
                 for (i = 0; i < t->cols; ++i) {
-                        if (max[i] + trimthrshld > avg) {
+                        if (max[i] > 2 && max[i] + trimthrshld > avg) {
                                 max[i] -= 1;
                                 width -= 1;
                                 none = false;
@@ -318,7 +315,7 @@ bool table_print(struct table const *t, size_t n, FILE *f)
         fputc(CORNER, f);
         fputc('\n', f);
 
-        print_row(t->headers, max, remaining, t->cols, f);
+        print_row(t->headers, max, t->cols, f);
 
         fputc(INTERSECT, f);
         fputnc('-', width - 2, f);
@@ -326,7 +323,7 @@ bool table_print(struct table const *t, size_t n, FILE *f)
         fputc('\n', f);
 
         for (i = 0; i < t->rows; ++i) {
-                print_row(t->data[i], max, remaining, t->cols, f);
+                print_row(t->data[i], max, t->cols, f);
 
                 if (i + 1 < t->rows) {
                         size_t j;
@@ -344,7 +341,6 @@ bool table_print(struct table const *t, size_t n, FILE *f)
         fputc(CORNER, f);
         fputc('\n', f);
 
-        free(remaining);
         free(max);
         return true;
 }

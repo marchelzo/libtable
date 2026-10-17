@@ -11,6 +11,25 @@ cd libtable && \
 make && sudo make install
 ```
 
+### Unicode
+
+Column widths account for wide CJK characters, emoji
+(including ZWJ sequences, skin tones and flags) and
+combining marks, using Unicode 17.0.0 tables (`width_data.inc`)
+
+To regenerate the tables from the Unicode 17.0.0 data files:
+
+```sh
+mkdir -p ucd/emoji ucd/auxiliary
+for f in UnicodeData.txt EastAsianWidth.txt DerivedCoreProperties.txt \
+         LineBreak.txt emoji/emoji-data.txt auxiliary/GraphemeBreakProperty.txt \
+         auxiliary/GraphemeBreakTest.txt; do
+        curl -fL -o "ucd/$f" "https://www.unicode.org/Public/17.0.0/ucd/$f"
+done
+python3 tools/unicode/generate.py ucd > width_data.inc
+make check UCD=ucd
+```
+
 ### Example usage
 
 ```c
